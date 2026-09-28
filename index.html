@@ -152,7 +152,7 @@ tbody tr:hover{background:var(--gray)}
 <section class="view" id="v-asambleas"><h2>Asambleas</h2><p class="sub">Información de las asambleas y registro de asistencia.</p><div class="grid" id="lista-asambleas"></div></section>
 <section class="view" id="v-asistencia"><h2>Registro de asistencia</h2><div id="asis-body"></div></section>
 <section class="view" id="v-gestion"><h2>Gestionar asambleas</h2><p class="sub">Crea asambleas, abre el registro de asistencia y muestra el código QR.</p>
-<button class="btn" data-act="nueva">+ Nueva asamblea</button><div id="g-lista"></div><div id="g-asist"></div></section>
+<button class="btn" data-act="nueva">+ Nueva asamblea</button><p id="g-err" style="color:var(--brand);font-weight:600;margin:12px 0 0"></p><div id="g-lista"></div><div id="g-asist"></div></section>
 </main>
 <div id="qr-box" class="qr" hidden></div>
 <footer><div class="wrap">Centro de Estudiantes de Administración Pública · Universidad de Santiago de Chile</div></footer>
@@ -338,9 +338,13 @@ $("b-guardar").addEventListener("click", async () => {
 let ASAMBLEAS = [], ASIST = [], ASIST_ID = null, asmActual = null;
 const rest = (t, q, tok) => fetch(`${SB}/rest/v1/${t}${q || ""}`, { headers: H(tok) });
 async function api(metodo, ruta, cuerpo) {
-  const r = await fetch(`${SB}/rest/v1/${ruta}`, { method: metodo, headers: { ...H(token), Prefer: "return=minimal" }, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
+  const e = $("g-err"); let r;
+  try { r = await fetch(`${SB}/rest/v1/${ruta}`, { method: metodo, headers: { ...H(token), Prefer: "return=minimal" }, body: cuerpo ? JSON.stringify(cuerpo) : undefined }); }
+  catch (x) { e.textContent = "Sin conexión. Intenta de nuevo."; return null; }
   if (r.status === 401) { salir(); location.hash = "#ingreso"; $("l-msg").textContent = "Tu sesión expiró. Vuelve a ingresar."; return null; }
-  return r;
+  if (!r.ok) { let d = ""; try { d = (await r.clone().json()).message || ""; } catch (x) {}
+    e.textContent = r.status === 404 ? "Faltan las tablas en Supabase: ejecuta el SQL de la Etapa 3. (" + d + ")" : "Error " + r.status + ": " + d; return r; }
+  e.textContent = ""; return r;
 }
 const nroActa = n => "Acta N.º " + String(n).padStart(2, "0");
 async function cargarAsambleas() {
