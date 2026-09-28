@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Centro de Estudiantes de Administración Pública</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#faf8f5;--fg:#1c1b1a;--muted:#6a6660;--card:#fff;--line:#e4dfd7;--accent:#c8102e;--accent-fg:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#151413;--fg:#f2efea;--muted:#a09a92;--card:#201f1d;--line:#34312e;--accent:#ff4d63;--accent-fg:#151413}}
+:root[data-theme="dark"]{--bg:#151413;--fg:#f2efea;--muted:#a09a92;--card:#201f1d;--line:#34312e;--accent:#ff4d63;--accent-fg:#151413}
+html{scroll-padding-top:env(safe-area-inset-top,0px);scroll-behavior:smooth}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Georgia,"Times New Roman",serif;line-height:1.6}
+h1,h2,h3,nav,.tag,button,a.btn{font-family:"Helvetica Neue",Arial,sans-serif}
+header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);border-bottom:1px solid var(--line);z-index:5}
+.wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+nav{display:flex;align-items:center;justify-content:space-between;gap:12px;height:56px}
+nav b{letter-spacing:.04em;font-size:15px}
+nav div{display:flex;gap:16px;font-size:14px;overflow-x:auto}
+nav a{color:var(--fg);text-decoration:none;white-space:nowrap}
+nav a:hover{color:var(--accent)}
+.hero{padding:72px 0 56px}
+.tag{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase}
+h1{font-size:clamp(34px,7vw,60px);line-height:1.05;margin:12px 0 18px;max-width:14em}
+.hero p{max-width:34em;color:var(--muted);font-size:19px}
+a.btn{display:inline-block;margin:22px 10px 0 0;padding:12px 22px;background:var(--accent);color:var(--accent-fg);text-decoration:none;font-weight:700;border-radius:4px}
+a.btn.alt{background:none;color:var(--fg);border:1px solid var(--line)}
+section{padding:48px 0;border-top:1px solid var(--line)}
+h2{font-size:28px;margin:0 0 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:20px}
+.card h3{margin:0 0 6px;font-size:17px}
+.card p{margin:0;color:var(--muted);font-size:15px}
+.date{font-family:Arial,sans-serif;font-size:12px;color:var(--accent);font-weight:700}
+input,textarea{width:100%;padding:12px;margin-bottom:12px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:4px;font:inherit}
+button{padding:12px 22px;background:var(--accent);color:var(--accent-fg);border:0;border-radius:4px;font-weight:700;cursor:pointer}
+form{max-width:520px}
+footer{padding:32px 0;border-top:1px solid var(--line);color:var(--muted);font:14px Arial,sans-serif}
+#ok{display:none;margin-top:10px;color:var(--accent);font-family:Arial,sans-serif}
+</style>
+</head>
+<body>
+<header><div class="wrap"><nav>
+<b>CEAP</b>
+<div><a href="#nosotros">Nosotros</a><a href="#secretarias">Secretarías</a><a href="#noticias">Noticias</a><a href="#demandas">Demandas</a><a href="#contacto">Contacto</a></div>
+</nav></div></header>
+
+<main class="wrap">
+<div class="hero">
+<span class="tag">Administración Pública</span>
+<h1>Organización estudiantil al servicio de la comunidad.</h1>
+<p>Somos el centro de estudiantes de Administración Pública. Representamos, coordinamos y damos voz a las demandas de nuestra carrera.</p>
+<a class="btn" href="#demandas">Envía tu demanda</a><a class="btn alt" href="#secretarias">Conoce las secretarías</a>
+</div>
+
+<section id="nosotros">
+<h2>Quiénes somos</h2>
+<p style="max-width:40em">Somos un espacio de participación de las y los estudiantes de la carrera. Recogemos inquietudes, las formalizamos y las llevamos a las autoridades de la facultad y la universidad, siempre con transparencia y trabajo colectivo.</p>
+</section>
+
+<section id="secretarias">
+<h2>Secretarías</h2>
+<div class="grid">
+<div class="card"><h3>Comunicaciones</h3><p>Redes, difusión y comunicación oficial del centro.</p></div>
+<div class="card"><h3>Cultura</h3><p>Actividades artísticas y espacios de encuentro.</p></div>
+<div class="card"><h3>Género</h3><p>Igualdad, prevención y acompañamiento.</p></div>
+<div class="card"><h3>Deporte</h3><p>Campeonatos, talleres y vida activa.</p></div>
+<div class="card"><h3>Extensión</h3><p>Vínculo con la comunidad y otras organizaciones.</p></div>
+<div class="card"><h3>Finanzas</h3><p>Recursos y rendición de cuentas.</p></div>
+</div>
+</section>
+
+<section id="noticias">
+<h2>Noticias</h2>
+<div class="grid">
+<div class="card"><span class="date">DD MES 2026</span><h3>Título de la noticia</h3><p>Reemplaza este texto con el resumen de tu primera noticia.</p></div>
+<div class="card"><span class="date">DD MES 2026</span><h3>Título de la noticia</h3><p>Reemplaza este texto con el resumen de tu segunda noticia.</p></div>
+<div class="card"><span class="date">DD MES 2026</span><h3>Título de la noticia</h3><p>Reemplaza este texto con el resumen de tu tercera noticia.</p></div>
+</div>
+</section>
+
+<section id="demandas">
+<h2>Demandas estudiantiles</h2>
+<p style="max-width:40em;color:var(--muted)">¿Tienes un problema o una propuesta para la carrera? Cuéntanos y la sumamos al petitorio.</p>
+<form onsubmit="event.preventDefault();document.getElementById('ok').style.display='block';this.reset()">
+<input placeholder="Nombre (opcional)">
+<input placeholder="Nivel o año de ingreso">
+<textarea rows="4" placeholder="Describe tu demanda o propuesta" required></textarea>
+<button>Enviar</button><div id="ok">¡Gracias! Recibimos tu mensaje.</div>
+</form>
+</section>
+
+<section id="contacto">
+<h2>Contacto</h2>
+<p>Instagram: @tu_centro · Correo: contacto@tucentro.cl</p>
+</section>
+</main>
+<footer><div class="wrap">© 2026 Centro de Estudiantes de Administración Pública</div></footer>
+</body>
+</html>
