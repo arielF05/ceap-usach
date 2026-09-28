@@ -83,6 +83,8 @@ tbody tr:hover{background:var(--gray)}
 [hidden]{display:none!important}
 .qr{position:fixed;inset:0;background:#fff;z-index:50;display:flex;align-items:center;justify-content:center;overflow:auto}
 .qr-in{text-align:center;padding:24px}
+.qr-cnt{display:inline-flex;align-items:baseline;gap:10px;margin:2px 0 10px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.qr-cnt b{font-size:24px;letter-spacing:0;color:var(--brand)}
 .qr-svg svg{width:min(80vw,440px);height:auto;border:1px solid var(--line);border-radius:8px}
 #g-lista .card{margin-top:16px}
 </style>
@@ -257,7 +259,7 @@ $("resumen").innerHTML = `<div class="card"><div class="lbl">Avance del programa
 /* ============ Conexión con Supabase (datos en la nube + inicio de sesión) ============ */
 const SB = "https://ajyiiojsmspcwruzkicb.supabase.co";
 const KEY = "sb_publishable_cWUYh9A3gLrVW3rzHvjenA_geVMFwJv"; // clave pública: es seguro que esté aquí
-let token = null, borrador = null;
+let token = null, rtoken = null, borrador = null;
 const H = t => t ? { apikey: KEY, Authorization: "Bearer " + t, "Content-Type": "application/json" } : { apikey: KEY, "Content-Type": "application/json" };
 const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
 const copia = o => JSON.parse(JSON.stringify(o));
@@ -273,7 +275,7 @@ async function cargar() {
 function menu() {
   $("m-ing").hidden = !!token; $("m-adm").hidden = !token; $("m-ges").hidden = !token; $("m-out").hidden = !token;
 }
-function salir() { token = null; borrador = null; menu(); }
+function salir() { token = null; rtoken = null; borrador = null; menu(); }
 
 $("f-login").addEventListener("submit", async ev => {
   ev.preventDefault(); const m = $("l-msg"); m.textContent = "Ingresando...";
@@ -282,7 +284,7 @@ $("f-login").addEventListener("submit", async ev => {
       body: JSON.stringify({ email: $("l-user").value.trim(), password: $("l-pass").value }) });
     const j = await r.json();
     if (!r.ok || !j.access_token) throw new Error();
-    token = j.access_token; $("l-pass").value = ""; m.textContent = "";
+    token = j.access_token; rtoken = j.refresh_token; $("l-pass").value = ""; m.textContent = "";
     borrador = copia(DATOS); editor(); menu(); location.hash = "#admin";
   } catch (e) { m.textContent = "Usuario o contraseña incorrectos."; }
 });
@@ -427,13 +429,35 @@ function exportar() {
   const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
   const l = document.createElement("a"); l.href = url; l.download = "asistencia-" + a.nombre.replace(/[^\w]+/g, "-") + ".csv"; l.click(); URL.revokeObjectURL(url);
 }
-function mostrarQR(id) {
-  const a = ASAMBLEAS.find(x => x.id == id), url = location.origin + location.pathname + "#asistencia-" + id;
-  const q = qrcode(0, "M"); q.addData(url); q.make();
-  $("qr-box").innerHTML = `<div class="qr-in"><h2>${esc(a.nombre)}</h2><p class="sub">Escanea para registrar tu asistencia</p><div class="qr-svg">${q.createSvgTag({ cellSize: 8, margin: 2, scalable: true })}</div><p style="font-size:13px;color:var(--muted);word-break:break-all">${esc(url)}</p><button class="btn" data-act="cerrarqr">Cerrar</button></div>`;
-  $("qr-box").hidden = false;
+let qrTimer = null, qrId = null, bloqueo = null;
+async function renovar() {   // renueva la sesión para que no se cierre durante una asamblea larga
+  if (!rtoken) return false;
+  try { const r = await fetch(SB + "/auth/v1/token?grant_type=refresh_token", { method: "POST", headers: H(), body: JSON.stringify({ refresh_token: rtoken }) });
+    const j = await r.json(); if (!r.ok || !j.access_token) return false; token = j.access_token; rtoken = j.refresh_token; return true; } catch (e) { return false; }
 }
-$("qr-box").addEventListener("click", e => { if (e.target.closest("[data-act=cerrarqr]")) $("qr-box").hidden = true; });
+setInterval(() => { if (rtoken) renovar(); }, 45 * 60 * 1000);
+async function contar() {
+  const u = `${SB}/rest/v1/asistencia?asamblea_id=eq.${qrId}&select=id`;
+  try {
+    let r = await fetch(u, { headers: H(token) });
+    if (r.status === 401 && await renovar()) r = await fetch(u, { headers: H(token) });
+    if (r.ok) $("qr-n").textContent = (await r.json()).length;
+  } catch (e) {}
+}
+function cerrarQR() {
+  clearInterval(qrTimer); qrTimer = null; $("qr-box").hidden = true;
+  if (bloqueo) { bloqueo.release().catch(() => {}); bloqueo = null; }
+}
+async function mostrarQR(id) {
+  const a = ASAMBLEAS.find(x => x.id == id), url = location.origin + location.pathname + "#asistencia-" + id;
+  const q = qrcode(0, "M"); q.addData(url); q.make(); qrId = id;
+  $("qr-box").innerHTML = `<div class="qr-in"><h2>${esc(a.nombre)}</h2><p class="sub">Escanea para registrar tu asistencia</p>
+    <div class="qr-cnt"><span>Asistencia en línea</span><b id="qr-n">0</b></div>
+    <div class="qr-svg">${q.createSvgTag({ cellSize: 8, margin: 2, scalable: true })}</div><p style="font-size:13px;color:var(--muted);word-break:break-all">${esc(url)}</p><button class="btn ghost" data-act="cerrarqr">Cerrar</button></div>`;
+  $("qr-box").hidden = false; contar(); clearInterval(qrTimer); qrTimer = setInterval(contar, 3000);
+  try { bloqueo = await navigator.wakeLock.request("screen"); } catch (e) {}   // evita que la pantalla se apague
+}
+$("qr-box").addEventListener("click", e => { if (e.target.closest("[data-act=cerrarqr]")) cerrarQR(); });
 $("v-gestion").addEventListener("input", e => {
   const t = e.target, a = ASAMBLEAS.find(x => x.id == t.dataset.a); if (!a) return;
   a[t.dataset.k] = t.type === "number" ? (t.value === "" ? null : Number(t.value)) : (t.value === "" && (t.type === "date" || t.type === "time") ? null : t.value);
