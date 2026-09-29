@@ -563,12 +563,31 @@ async function cargarMociones() {
   pintarMociones();
 }
 const numMoc = n => "Moción N.º " + String(n).padStart(2, "0");
+let contadoresVoto = [];
 function pintarMociones() {
+  contadoresVoto.forEach(clearInterval); contadoresVoto = [];
   $("lista-mociones").innerHTML = MOCIONES.length ? MOCIONES.map(m => { const v = m.votaciones && m.votaciones[0];
     return `<div class="card"><div class="row"><h3 style="margin:0">${numMoc(m.numero || 0)}</h3><span class="pill" style="margin:0">${esc(m.estado)}</span></div>
-    <p style="margin:10px 0;font-weight:600">${esc(m.titulo)}</p><p class="sub" style="margin:0 0 12px">${esc(m.descripcion || "")}</p>
+    ${v ? `<div class="qr-cnt" style="margin:8px 0 0"><span>Votos</span><b id="mv-${v.id}">…</b></div>` : ""}
+    ${m.fecha ? `<p class="sub" style="margin:4px 0 0">Fecha de votación: ${fecha(m.fecha)}</p>` : ""}
+    <p style="margin:10px 0;font-weight:600">${esc(m.titulo)}</p><p class="sub" style="margin:0 0 4px">${esc(m.descripcion || "")}</p>
+    ${v ? `<p id="md-${v.id}" style="font-size:12px;color:var(--muted);margin:0 0 12px">Cargando conteo...</p>` : ""}
     ${v && v.abierta ? `<a class="btn" href="#votar-${v.id}">Votar</a>` : `<span class="lbl">${v ? "Votación cerrada" : "Sin votación abierta"}</span>`}</div>`; }).join("")
     : `<p class="sub">Aún no hay mociones publicadas.</p>`;
+  MOCIONES.forEach(m => { const v = m.votaciones && m.votaciones[0]; if (!v) return;
+    conteoPublico(v.id);
+    if (v.abierta) contadoresVoto.push(setInterval(() => conteoPublico(v.id), 4000));
+  });
+}
+async function conteoPublico(votId) {
+  try {
+    const r = await fetch(SB + "/rest/v1/rpc/conteo_votos", { method: "POST", headers: H(), body: JSON.stringify({ vid: votId }) });
+    if (!r.ok) throw 0; const filas = await r.json();
+    const c = { SI: 0, NO: 0, ABSTENCION: 0 }; filas.forEach(f => c[f.opcion] = Number(f.cantidad));
+    const tot = c.SI + c.NO + c.ABSTENCION;
+    if ($("mv-" + votId)) $("mv-" + votId).textContent = tot;
+    if ($("md-" + votId)) $("md-" + votId).textContent = `Sí ${c.SI} · No ${c.NO} · Abstención ${c.ABSTENCION}`;
+  } catch (e) { if ($("md-" + votId)) $("md-" + votId).textContent = ""; }
 }
 
 async function abrirVotacion(id) {
@@ -684,7 +703,7 @@ function ir() {
   if (h.startsWith("votar-")) { abrirVotacion(h.slice(6)); h = "votar"; }
   if (h === "asambleas") cargarAsambleas();
   if (h === "gestion") gestion();
-  if (h === "mociones") cargarMociones();
+  if (h === "mociones") cargarMociones(); else { contadoresVoto.forEach(clearInterval); contadoresVoto = []; }
   if (h === "gestion-mociones") gestionMociones();
   if (h === "estadisticas") { if (!token) h = "ingreso"; else cargarEstadisticas(); }
   const vista = $("v-" + h) ? h : "inicio";
