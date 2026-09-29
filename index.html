@@ -118,8 +118,8 @@ tbody tr:hover{background:var(--gray)}
 <div class="menu-wrap">
 <button id="menu-btn" aria-haspopup="true" aria-expanded="false">Menú ▾</button>
 <div id="menu" role="menu">
-<a href="#inicio">Inicio</a><a href="#actas">Actas</a><a href="#transparencia">Transparencia</a><a href="#programa">Programa</a><a href="#asambleas">Asambleas</a>
-<a href="#ingreso" id="m-ing">Ingresar</a><a href="#admin" id="m-adm" hidden>Editar datos</a><a href="#gestion" id="m-ges" hidden>Gestionar asambleas</a><a href="#" id="m-out" hidden>Cerrar sesión</a>
+<a href="#inicio">Inicio</a><a href="#actas">Actas</a><a href="#transparencia">Transparencia</a><a href="#programa">Programa</a><a href="#asambleas">Asambleas</a><a href="#mociones">Mociones</a>
+<a href="#ingreso" id="m-ing">Ingresar</a><a href="#admin" id="m-adm" hidden>Editar datos</a><a href="#gestion" id="m-ges" hidden>Gestionar asambleas</a><a href="#gestion-mociones" id="m-mges" hidden>Gestionar mociones</a><a href="#" id="m-out" hidden>Cerrar sesión</a>
 </div></div>
 </div>
 </header>
@@ -141,8 +141,8 @@ tbody tr:hover{background:var(--gray)}
 <a class="card" href="#programa"><h3>Programa</h3><p>Avance de los compromisos.</p></a>
 <a class="card" href="#asambleas"><h3>Asambleas</h3><p>Fechas, modalidad y registro.</p></a>
 <a class="card" href="#asambleas"><h3>Asistencia</h3><p>Registro mediante QR.</p></a>
-<div class="card soon"><h3>Votaciones</h3><p>Votación digital con QR.</p><span class="pill">Etapa 4</span></div>
-<div class="card soon"><h3>Mociones</h3><p>Propuestas presentadas.</p><span class="pill">Etapa 4</span></div>
+<a class="card" href="#mociones"><h3>Votaciones</h3><p>Votación digital con QR.</p></a>
+<a class="card" href="#mociones"><h3>Mociones</h3><p>Propuestas presentadas.</p></a>
 <div class="card soon"><h3>Información institucional</h3><p>Quiénes somos y contacto.</p><span class="pill">Próximamente</span></div>
 </div>
 </section>
@@ -184,6 +184,10 @@ tbody tr:hover{background:var(--gray)}
 </section>
 <section class="view" id="v-asambleas"><h2>Asambleas</h2><p class="sub">Información de las asambleas y registro de asistencia.</p><div class="grid" id="lista-asambleas"></div></section>
 <section class="view" id="v-asistencia"><h2>Registro de asistencia</h2><div id="asis-body"></div></section>
+<section class="view" id="v-mociones"><h2>Mociones</h2><p class="sub">Propuestas presentadas y su estado de votación.</p><div class="grid" id="lista-mociones"></div></section>
+<section class="view" id="v-votar"><h2>Votación</h2><div id="votar-body"></div></section>
+<section class="view" id="v-gestion-mociones"><h2>Gestionar mociones</h2><p class="sub">Crea mociones, abre la votación y revisa los resultados.</p>
+<button class="btn" data-mact="nueva">+ Nueva moción</button><p id="m-err" style="color:var(--brand);font-weight:600;margin:12px 0 0"></p><div id="mg-lista"></div></section>
 <section class="view" id="v-gestion"><h2>Gestionar asambleas</h2><p class="sub">Crea asambleas, abre el registro de asistencia y muestra el código QR.</p>
 <button class="btn" data-act="nueva">+ Nueva asamblea</button><p id="g-err" style="color:var(--brand);font-weight:600;margin:12px 0 0"></p><div id="g-lista"></div><div id="g-asist"></div></section>
 </main>
@@ -306,7 +310,7 @@ async function cargar() {
 }
 
 function menu() {
-  $("m-ing").hidden = !!token; $("m-adm").hidden = !token; $("m-ges").hidden = !token; $("m-out").hidden = !token;
+  $("m-ing").hidden = !!token; $("m-adm").hidden = !token; $("m-ges").hidden = !token; $("m-mges").hidden = !token; $("m-out").hidden = !token;
 }
 function salir() { token = null; rtoken = null; borrador = null; menu(); }
 
@@ -520,6 +524,100 @@ async function grabar(id) {
   } catch (e) { box.innerHTML = `<div class="rec-box">No se pudo acceder al micrófono. Revisa los permisos del navegador.</div>` + box.innerHTML; }
 }
 
+
+/* ============ Etapa 4: mociones y votaciones (SI / NO / ABSTENCIÓN) por QR ============ */
+let MOCIONES = [];
+async function cargarMociones() {
+  try { const r = await rest("mociones", "?select=*,votaciones(id,abierta)&order=numero.desc.nullslast,id.desc"); if (r.ok) MOCIONES = await r.json(); } catch (e) {}
+  pintarMociones();
+}
+const numMoc = n => "Moción N.º " + String(n).padStart(2, "0");
+function pintarMociones() {
+  $("lista-mociones").innerHTML = MOCIONES.length ? MOCIONES.map(m => { const v = m.votaciones && m.votaciones[0];
+    return `<div class="card"><div class="row"><h3 style="margin:0">${numMoc(m.numero || 0)}</h3><span class="pill" style="margin:0">${esc(m.estado)}</span></div>
+    <p style="margin:10px 0;font-weight:600">${esc(m.titulo)}</p><p class="sub" style="margin:0 0 12px">${esc(m.descripcion || "")}</p>
+    ${v && v.abierta ? `<a class="btn" href="#votar-${v.id}">Votar</a>` : `<span class="lbl">${v ? "Votación cerrada" : "Sin votación abierta"}</span>`}</div>`; }).join("")
+    : `<p class="sub">Aún no hay mociones publicadas.</p>`;
+}
+
+async function abrirVotacion(id) {
+  const v = $("votar-body"); v.innerHTML = `<p class="sub">Cargando...</p>`;
+  let vot; try { const r = await rest("votaciones", `?id=eq.${encodeURIComponent(id)}&select=*,mociones(*)`); vot = (await r.json())[0]; } catch (e) {}
+  if (!vot) { v.innerHTML = `<p class="sub">No encontramos esta votación.</p>`; return; }
+  const m = vot.mociones;
+  if (!vot.abierta) { v.innerHTML = `<div class="card" style="max-width:460px"><h3>${esc(m.titulo)}</h3><p>Esta votación está cerrada.</p></div>`; return; }
+  v.innerHTML = `<form class="card" id="f-votar" style="max-width:460px"><h3>${numMoc(m.numero || 0)}</h3><p style="font-weight:600;margin:6px 0 4px">${esc(m.titulo)}</p><p class="sub" style="margin:0 0 14px">${esc(m.descripcion || "")}</p>
+    <label class="lbl">RUT</label><input id="v-rut" required placeholder="12.345.678-9" autocomplete="off">
+    <p style="font-size:13px;color:var(--muted);margin:0 0 14px">Tu RUT se usa solo para validar que cada persona vote una vez.</p>
+    <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn" type="submit" data-op="SI">Sí</button><button class="btn" type="submit" data-op="NO">No</button><button class="btn ghost" type="submit" data-op="ABSTENCION">Abstención</button></div>
+    <p id="v-msg" class="sub" style="margin:10px 0 0"></p></form>`;
+  $("f-votar").addEventListener("click", e => { const b = e.target.closest("button[data-op]"); if (b) $("f-votar").dataset.op = b.dataset.op; });
+  $("f-votar").addEventListener("submit", async ev => {
+    ev.preventDefault(); const m2 = $("v-msg"), rut = rutValido($("v-rut").value), op = $("f-votar").dataset.op;
+    if (!op) { m2.textContent = "Elige una opción."; return; }
+    if (!rut) { m2.textContent = "El RUT no es válido. Revísalo (ej: 12.345.678-9)."; return; }
+    m2.textContent = "Enviando voto...";
+    try {
+      const r = await fetch(SB + "/rest/v1/votos", { method: "POST", headers: { ...H(), Prefer: "return=minimal" },
+        body: JSON.stringify({ votacion_id: vot.id, identificador: rut, opcion: op }) });
+      if (r.status === 409) { m2.textContent = "Este RUT ya emitió su voto en esta votación."; return; }
+      if (!r.ok) { m2.textContent = "No se pudo votar. Puede que la votación se haya cerrado."; return; }
+      $("f-votar").innerHTML = `<h3>Voto registrado</h3><p>Gracias, tu voto quedó registrado.</p>`;
+    } catch (e) { m2.textContent = "Error de conexión. Intenta de nuevo."; }
+  });
+}
+
+// Administración de mociones y votaciones
+const MF = [["numero", "N.º", "number"], ["titulo", "Título", "text"], ["descripcion", "Descripción", "text"], ["fecha", "Fecha", "date"], ["estado", "Estado", ["En votación", "Cerrada", "Aprobada", "Rechazada"]]];
+async function gestionMociones() { if (!token) return; await cargarMociones(); editorMociones(); }
+function editorMociones() {
+  $("mg-lista").innerHTML = MOCIONES.map(m => { const v = m.votaciones && m.votaciones[0];
+    return `<div class="card"><div class="row"><h3 style="margin:0">${numMoc(m.numero || 0)}</h3><span class="pill" style="margin:0">${v ? (v.abierta ? "Votación abierta" : "Votación cerrada") : "Sin votación"}</span></div>
+    <div class="f2" style="margin-top:12px">` + MF.map(([k, t, ty]) => `<div><label class="lbl">${t}</label>` + (Array.isArray(ty)
+      ? `<select data-m="${m.id}" data-k="${k}">${ty.map(o => `<option${o === m[k] ? " selected" : ""}>${o}</option>`).join("")}</select>`
+      : `<input type="${ty}" data-m="${m.id}" data-k="${k}" value="${esc(m[k])}">`) + `</div>`).join("") + `</div>
+    <div class="row" style="justify-content:flex-start;gap:8px;flex-wrap:wrap">
+    <button class="btn" data-mact="guardar" data-id="${m.id}">Guardar cambios</button>
+    ${v ? `<button class="btn ghost" data-mact="toggle" data-id="${v.id}">${v.abierta ? "Cerrar votación" : "Abrir votación"}</button>
+      <button class="btn ghost" data-mact="qr" data-id="${v.id}" data-t="${esc(m.titulo)}">Mostrar QR</button>
+      <button class="btn ghost" data-mact="resultados" data-id="${v.id}">Ver resultados</button>`
+      : `<button class="btn ghost" data-mact="crear-vot" data-id="${m.id}">Crear votación</button>`}
+    <button class="btn ghost" data-mact="borrar" data-id="${m.id}">Eliminar</button></div>
+    <div id="res-${m.id}"></div></div>`; }).join("");
+}
+async function verResultados(votId, mocId) {
+  const r = await api("GET", `votos?votacion_id=eq.${votId}&select=opcion`); if (!r || !r.ok) return;
+  const votos = await r.json();
+  const c = { SI: 0, NO: 0, ABSTENCION: 0 }; votos.forEach(v => c[v.opcion]++);
+  const tot = votos.length || 1;
+  $("res-" + mocId).innerHTML = `<div class="card" style="margin-top:12px;background:var(--gray)"><div class="lbl">Resultados</div>
+    ${[["Sí", c.SI], ["No", c.NO], ["Abstención", c.ABSTENCION]].map(([l, n]) => `<div style="margin:8px 0"><div class="row"><span>${l}</span><b>${n} · ${Math.round(n / tot * 100)}%</b></div><div class="bar"><i style="width:${n / tot * 100}%"></i></div></div>`).join("")}
+    <p class="sub" style="margin:8px 0 0">Total: ${votos.length} votos</p></div>`;
+}
+$("v-gestion-mociones").addEventListener("input", e => {
+  const t = e.target, m = MOCIONES.find(x => x.id == t.dataset.m); if (!m) return;
+  m[t.dataset.k] = t.type === "number" ? (t.value === "" ? null : Number(t.value)) : (t.value === "" && t.type === "date" ? null : t.value);
+});
+$("v-gestion-mociones").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const act = b.dataset.mact, id = b.dataset.id, m = MOCIONES.find(x => x.id == id);
+  if (act === "nueva") { const r = await api("POST", "mociones", { numero: Math.max(0, ...MOCIONES.map(x => x.numero || 0)) + 1, titulo: "Nueva moción", estado: "En votación" }); if (r && r.ok) { await cargarMociones(); editorMociones(); } }
+  if (act === "guardar") { const r = await api("PATCH", `mociones?id=eq.${id}`, { numero: m.numero, titulo: m.titulo, descripcion: m.descripcion, fecha: m.fecha, estado: m.estado });
+    if (r) { b.textContent = r.ok ? "Guardado" : "Error al guardar"; setTimeout(() => b.textContent = "Guardar cambios", 1800); } }
+  if (act === "crear-vot") { const r = await api("POST", "votaciones", { mocion_id: id }); if (r && r.ok) { await cargarMociones(); editorMociones(); } }
+  if (act === "toggle") { const votId = id; const cur = MOCIONES.flatMap(x => x.votaciones || []).find(v => v.id == votId);
+    const r = await api("PATCH", `votaciones?id=eq.${votId}`, { abierta: !cur.abierta }); if (r && r.ok) { await cargarMociones(); editorMociones(); } }
+  if (act === "qr") mostrarQRVotacion(id, b.dataset.t);
+  if (act === "resultados") { const moc = MOCIONES.find(x => (x.votaciones || []).some(v => v.id == id)); verResultados(id, moc.id); }
+  if (act === "borrar" && confirm("¿Eliminar esta moción y su votación?")) { const r = await api("DELETE", `mociones?id=eq.${id}`); if (r && r.ok) { await cargarMociones(); editorMociones(); } }
+});
+function mostrarQRVotacion(votId, titulo) {
+  const url = location.origin + location.pathname + "#votar-" + votId;
+  const q = qrcode(0, "M"); q.addData(url); q.make();
+  $("qr-box").innerHTML = `<div class="qr-in"><h2>${esc(titulo)}</h2><p class="sub">Escanea para votar</p><div class="qr-svg">${q.createSvgTag({ cellSize: 8, margin: 2, scalable: true })}</div><p style="font-size:13px;color:var(--muted);word-break:break-all">${esc(url)}</p><button class="btn ghost" data-act="cerrarqr">Cerrar</button></div>`;
+  $("qr-box").hidden = false;
+}
+
 $("v-gestion").addEventListener("click", async e => {
   const b = e.target.closest("button"); if (!b) return;
   const act = b.dataset.act, id = b.dataset.id, a = ASAMBLEAS.find(x => x.id == id);
@@ -541,8 +639,11 @@ function ir() {
   let h = (location.hash || "#inicio").slice(1);
   if ((h === "admin" || h === "gestion") && !token) h = "ingreso";
   if (h.startsWith("asistencia-")) { abrirAsistencia(h.slice(11)); h = "asistencia"; }
+  if (h.startsWith("votar-")) { abrirVotacion(h.slice(6)); h = "votar"; }
   if (h === "asambleas") cargarAsambleas();
   if (h === "gestion") gestion();
+  if (h === "mociones") cargarMociones();
+  if (h === "gestion-mociones") gestionMociones();
   const vista = $("v-" + h) ? h : "inicio";
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + vista));
   document.querySelectorAll("#menu a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + vista));
