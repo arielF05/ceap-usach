@@ -119,7 +119,7 @@ tbody tr:hover{background:var(--gray)}
 <button id="menu-btn" aria-haspopup="true" aria-expanded="false">Menú ▾</button>
 <div id="menu" role="menu">
 <a href="#inicio">Inicio</a><a href="#actas">Actas</a><a href="#transparencia">Transparencia</a><a href="#programa">Programa</a><a href="#asambleas">Asambleas</a><a href="#mociones">Mociones</a>
-<a href="#ingreso" id="m-ing">Ingresar</a><a href="#admin" id="m-adm" hidden>Editar datos</a><a href="#gestion" id="m-ges" hidden>Gestionar asambleas</a><a href="#gestion-mociones" id="m-mges" hidden>Gestionar mociones</a><a href="#" id="m-out" hidden>Cerrar sesión</a>
+<a href="#ingreso" id="m-ing">Ingresar</a><a href="#admin" id="m-adm" hidden>Editar datos</a><a href="#gestion" id="m-ges" hidden>Gestionar asambleas</a><a href="#gestion-mociones" id="m-mges" hidden>Gestionar mociones</a><a href="#estadisticas" id="m-est" hidden>Estadísticas</a><a href="#" id="m-out" hidden>Cerrar sesión</a>
 </div></div>
 </div>
 </header>
@@ -188,6 +188,7 @@ tbody tr:hover{background:var(--gray)}
 <section class="view" id="v-votar"><h2>Votación</h2><div id="votar-body"></div></section>
 <section class="view" id="v-gestion-mociones"><h2>Gestionar mociones</h2><p class="sub">Crea mociones, abre la votación y revisa los resultados.</p>
 <button class="btn" data-mact="nueva">+ Nueva moción</button><p id="m-err" style="color:var(--brand);font-weight:600;margin:12px 0 0"></p><div id="mg-lista"></div></section>
+<section class="view" id="v-estadisticas"><h2>Estadísticas</h2><p class="sub">Resumen general de participación.</p><div class="grid" id="est-cont"></div></section>
 <section class="view" id="v-gestion"><h2>Gestionar asambleas</h2><p class="sub">Crea asambleas, abre el registro de asistencia y muestra el código QR.</p>
 <button class="btn" data-act="nueva">+ Nueva asamblea</button><p id="g-err" style="color:var(--brand);font-weight:600;margin:12px 0 0"></p><div id="g-lista"></div><div id="g-asist"></div></section>
 </main>
@@ -293,6 +294,36 @@ $("resumen").innerHTML = `<div class="card programa-hi"><div class="lbl">Avance 
 
 }
 
+
+/* ============ Etapa 5: estadísticas, exportación y seguridad ============ */
+async function cargarEstadisticas() {
+  $("est-cont").innerHTML = `<p class="sub">Calculando...</p>`;
+  try {
+    const [ra, rs, rm, rv] = await Promise.all([
+      rest("asambleas", "?select=id", token), rest("asistencia", "?select=id,asamblea_id", token),
+      rest("mociones", "?select=id,votaciones(id)", token), rest("votos", "?select=id,votacion_id", token)
+    ]);
+    const asam = ra.ok ? await ra.json() : [], asis = rs.ok ? await rs.json() : [], moc = rm.ok ? await rm.json() : [], vot = rv.ok ? await rv.json() : [];
+    const conMocVot = moc.filter(m => m.votaciones && m.votaciones.length).length;
+    const prom = asam.length ? Math.round(asis.length / asam.length) : 0;
+    const votacionesConVoto = new Set(vot.map(v => v.votacion_id)).size;
+    const partProm = votacionesConVoto ? Math.round(vot.length / votacionesConVoto) : 0;
+    $("est-cont").innerHTML = [
+      ["Asambleas realizadas", asam.length], ["Registros de asistencia", asis.length], ["Asistencia promedio por asamblea", prom],
+      ["Mociones creadas", moc.length], ["Mociones con votación", conMocVot], ["Votos promedio por votación", partProm]
+    ].map(([t, v]) => `<div class="card"><div class="lbl">${t}</div><div class="big">${v}</div></div>`).join("");
+  } catch (e) { $("est-cont").innerHTML = `<p class="sub">No se pudieron cargar las estadísticas.</p>`; }
+}
+
+// Cierre de sesión por inactividad (20 minutos), para no dejar el panel abierto sin supervisión
+let inactTimer = null;
+function reiniciarInactividad() {
+  clearTimeout(inactTimer);
+  if (!token) return;
+  inactTimer = setTimeout(() => { salir(); location.hash = "#inicio"; alert("Tu sesión se cerró por inactividad."); }, 20 * 60 * 1000);
+}
+["click", "keydown", "mousemove", "touchstart"].forEach(ev => document.addEventListener(ev, reiniciarInactividad));
+
 /* ============ Conexión con Supabase (datos en la nube + inicio de sesión) ============ */
 const SB = "https://ajyiiojsmspcwruzkicb.supabase.co";
 const KEY = "sb_publishable_cWUYh9A3gLrVW3rzHvjenA_geVMFwJv"; // clave pública: es seguro que esté aquí
@@ -310,9 +341,9 @@ async function cargar() {
 }
 
 function menu() {
-  $("m-ing").hidden = !!token; $("m-adm").hidden = !token; $("m-ges").hidden = !token; $("m-mges").hidden = !token; $("m-out").hidden = !token;
+  $("m-ing").hidden = !!token; $("m-adm").hidden = !token; $("m-ges").hidden = !token; $("m-mges").hidden = !token; $("m-est").hidden = !token; $("m-out").hidden = !token;
 }
-function salir() { token = null; rtoken = null; borrador = null; menu(); }
+function salir() { token = null; rtoken = null; borrador = null; clearTimeout(inactTimer); menu(); }
 
 $("f-login").addEventListener("submit", async ev => {
   ev.preventDefault(); const m = $("l-msg"); m.textContent = "Ingresando...";
@@ -322,7 +353,7 @@ $("f-login").addEventListener("submit", async ev => {
     const j = await r.json();
     if (!r.ok || !j.access_token) throw new Error();
     token = j.access_token; rtoken = j.refresh_token; $("l-pass").value = ""; m.textContent = "";
-    borrador = copia(DATOS); editor(); menu(); location.hash = "#admin";
+    borrador = copia(DATOS); editor(); menu(); reiniciarInactividad(); location.hash = "#admin";
   } catch (e) { m.textContent = "Usuario o contraseña incorrectos."; }
 });
 $("m-out").addEventListener("click", ev => { ev.preventDefault(); salir(); location.hash = "#inicio"; });
@@ -427,7 +458,7 @@ async function abrirAsistencia(id) {
       const r = await fetch(SB + "/rest/v1/asistencia", { method: "POST", headers: { ...H(), Prefer: "return=minimal" },
         body: JSON.stringify({ asamblea_id: asmActual.id, nombre, identificador: rut, modalidad: $("a-mod").value }) });
       if (r.status === 409) { m.textContent = "Este RUT ya registró asistencia en esta asamblea."; return; }
-      if (!r.ok) { m.textContent = "No se pudo registrar. Puede que el registro se haya cerrado."; return; }
+      if (!r.ok) { m.textContent = "El registro de asistencia se cerró mientras completabas el formulario. Consulta con la mesa."; return; }
       $("f-asis").innerHTML = `<h3>Asistencia registrada</h3><p>Gracias, ${esc(nombre)}. Quedaste registrado en la asamblea.</p>`;
     } catch (e) { m.textContent = "Error de conexión. Intenta de nuevo."; }
   });
@@ -561,7 +592,7 @@ async function abrirVotacion(id) {
       const r = await fetch(SB + "/rest/v1/votos", { method: "POST", headers: { ...H(), Prefer: "return=minimal" },
         body: JSON.stringify({ votacion_id: vot.id, identificador: rut, opcion: op }) });
       if (r.status === 409) { m2.textContent = "Este RUT ya emitió su voto en esta votación."; return; }
-      if (!r.ok) { m2.textContent = "No se pudo votar. Puede que la votación se haya cerrado."; return; }
+      if (!r.ok) { m2.textContent = "La votación se cerró mientras completabas el formulario. Consulta con la mesa."; return; }
       $("f-votar").innerHTML = `<h3>Voto registrado</h3><p>Gracias, tu voto quedó registrado.</p>`;
     } catch (e) { m2.textContent = "Error de conexión. Intenta de nuevo."; }
   });
@@ -585,14 +616,22 @@ function editorMociones() {
     <button class="btn ghost" data-mact="borrar" data-id="${m.id}">Eliminar</button></div>
     <div id="res-${m.id}"></div></div>`; }).join("");
 }
-async function verResultados(votId, mocId) {
-  const r = await api("GET", `votos?votacion_id=eq.${votId}&select=opcion`); if (!r || !r.ok) return;
-  const votos = await r.json();
-  const c = { SI: 0, NO: 0, ABSTENCION: 0 }; votos.forEach(v => c[v.opcion]++);
-  const tot = votos.length || 1;
-  $("res-" + mocId).innerHTML = `<div class="card" style="margin-top:12px;background:var(--gray)"><div class="lbl">Resultados</div>
+let VOTOS = [], VOTOS_ID = null, VOTOS_TIT = "";
+async function verResultados(votId, mocId, titulo) {
+  const r = await api("GET", `votos?votacion_id=eq.${votId}&select=*&order=creado_en.asc`); if (!r || !r.ok) return;
+  VOTOS = await r.json(); VOTOS_ID = votId; VOTOS_TIT = titulo || "";
+  const c = { SI: 0, NO: 0, ABSTENCION: 0 }; VOTOS.forEach(v => c[v.opcion]++);
+  const tot = VOTOS.length || 1;
+  $("res-" + mocId).innerHTML = `<div class="card" style="margin-top:12px;background:var(--gray)"><div class="row"><div class="lbl">Resultados</div><button class="btn ghost" data-mact="excel-vot" data-id="${votId}" data-mid="${mocId}">Exportar a Excel</button></div>
     ${[["Sí", c.SI], ["No", c.NO], ["Abstención", c.ABSTENCION]].map(([l, n]) => `<div style="margin:8px 0"><div class="row"><span>${l}</span><b>${n} · ${Math.round(n / tot * 100)}%</b></div><div class="bar"><i style="width:${n / tot * 100}%"></i></div></div>`).join("")}
-    <p class="sub" style="margin:8px 0 0">Total: ${votos.length} votos</p></div>`;
+    <p class="sub" style="margin:8px 0 0">Total: ${VOTOS.length} votos</p></div>`;
+}
+function exportarVotos() {
+  const cel = c => { c = String(c); if (/^[=+\-@]/.test(c)) c = "'" + c; return '"' + c.replace(/"/g, '""') + '"'; };
+  const filas = VOTOS.map(v => { const d = new Date(v.creado_en); return [v.identificador, v.opcion, d.toLocaleDateString("es-CL"), d.toLocaleTimeString("es-CL"), VOTOS_TIT]; });
+  const csv = [["RUT", "Voto", "Fecha", "Hora", "Moción"], ...filas].map(f => f.map(cel).join(";")).join("\r\n");
+  const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+  const l = document.createElement("a"); l.href = url; l.download = "votacion-" + VOTOS_ID + ".csv"; l.click(); URL.revokeObjectURL(url);
 }
 $("v-gestion-mociones").addEventListener("input", e => {
   const t = e.target, m = MOCIONES.find(x => x.id == t.dataset.m); if (!m) return;
@@ -606,9 +645,11 @@ $("v-gestion-mociones").addEventListener("click", async e => {
     if (r) { b.textContent = r.ok ? "Guardado" : "Error al guardar"; setTimeout(() => b.textContent = "Guardar cambios", 1800); } }
   if (act === "crear-vot") { const r = await api("POST", "votaciones", { mocion_id: id }); if (r && r.ok) { await cargarMociones(); editorMociones(); } }
   if (act === "toggle") { const votId = id; const cur = MOCIONES.flatMap(x => x.votaciones || []).find(v => v.id == votId);
+    if (cur.abierta && !confirm("¿Cerrar la votación? Nadie más podrá votar.")) return;
     const r = await api("PATCH", `votaciones?id=eq.${votId}`, { abierta: !cur.abierta }); if (r && r.ok) { await cargarMociones(); editorMociones(); } }
   if (act === "qr") mostrarQRVotacion(id, b.dataset.t);
-  if (act === "resultados") { const moc = MOCIONES.find(x => (x.votaciones || []).some(v => v.id == id)); verResultados(id, moc.id); }
+  if (act === "resultados") { const moc = MOCIONES.find(x => (x.votaciones || []).some(v => v.id == id)); verResultados(id, moc.id, moc.titulo); }
+  if (act === "excel-vot") exportarVotos();
   if (act === "borrar" && confirm("¿Eliminar esta moción y su votación?")) { const r = await api("DELETE", `mociones?id=eq.${id}`); if (r && r.ok) { await cargarMociones(); editorMociones(); } }
 });
 function mostrarQRVotacion(votId, titulo) {
@@ -624,7 +665,8 @@ $("v-gestion").addEventListener("click", async e => {
   if (act === "nueva") { const r = await api("POST", "asambleas", { nombre: "Nueva asamblea" }); if (r && r.ok) { await cargarAsambleas(); editorAsambleas(); } }
   if (act === "guardar") { const r = await api("PATCH", `asambleas?id=eq.${id}`, { nombre: a.nombre, fecha: a.fecha, hora: a.hora, modalidad: a.modalidad, lugar: a.lugar, estado: a.estado, acta_n: a.acta_n });
     if (r) { b.textContent = r.ok ? "Guardado" : "Error al guardar"; setTimeout(() => b.textContent = "Guardar cambios", 1800); } }
-  if (act === "toggle") { const r = await api("PATCH", `asambleas?id=eq.${id}`, { abierta: !a.abierta }); if (r && r.ok) { a.abierta = !a.abierta; editorAsambleas(); } }
+  if (act === "toggle") { if (a.abierta && !confirm("¿Cerrar el registro de asistencia? Nadie más podrá registrarse.")) return;
+    const r = await api("PATCH", `asambleas?id=eq.${id}`, { abierta: !a.abierta }); if (r && r.ok) { a.abierta = !a.abierta; editorAsambleas(); } }
   if (act === "qr") mostrarQR(id);
   if (act === "grabar") grabar(id);
   if (act === "asist" || act === "refrescar") verAsistentes(act === "asist" ? id : ASIST_ID);
@@ -644,6 +686,7 @@ function ir() {
   if (h === "gestion") gestion();
   if (h === "mociones") cargarMociones();
   if (h === "gestion-mociones") gestionMociones();
+  if (h === "estadisticas") { if (!token) h = "ingreso"; else cargarEstadisticas(); }
   const vista = $("v-" + h) ? h : "inicio";
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + vista));
   document.querySelectorAll("#menu a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + vista));
